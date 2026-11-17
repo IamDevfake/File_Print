@@ -1,0 +1,10 @@
+node_modules
+.env
+.DS_Store
+
+# AutoBuild artifacts
+dist/
+build/
+logs/
+build_log.txt
+autobuild_report.txt
