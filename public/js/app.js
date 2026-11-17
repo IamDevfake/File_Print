@@ -73,9 +73,9 @@
   function aiPlan(s, g) {
     if (document.querySelector('input[name=eng]:checked').value !== 'ai') return { use: false, msg: '' };
     if (!AI.supported()) return { use: false, msg: 'เครื่องนี้ไม่รองรับ AI จึงใช้แบบปกติแทน' };
-    if (s <= 1.05) return { use: false, msg: 'รูปนี้ไม่ต้องขยาย AI จึงยังไม่ทำงาน ใช้แบบปกติแทน' };
+    if (s <= 1.05) return { use: false, msg: 'รูปนี้ไม่ต้องปรับคุณภาพ AI จึงยังไม่ทำงาน ใช้แบบปกติแทน' };
     if (g.cw * g.ch > AIMAX) return { use: false, msg: `รูปต้นฉบับใหญ่เกิน ${AIMAX / 1e6} ล้านพิกเซล ใช้แบบปกติแทนเพื่อไม่ให้ช้าหรือแรมไม่พอ` };
-    return { use: true, msg: `จะใช้ AI ขยาย ${s.toFixed(1)} เท่าตอนบันทึกหรือพิมพ์ (ใช้เวลานานกว่าแบบปกติ จะแสดงเวลาที่เหลือ)` };
+    return { use: true, msg: `จะใช้ AI คุณภาพ ${s.toFixed(1)} เท่าตอนบันทึกหรือพิมพ์ (ใช้เวลานานกว่าแบบปกติ จะแสดงเวลาที่เหลือ)` };
   }
 
   /* ลดสัญญาณรบกวนแบบรักษาขอบ (bilateral) ก่อนขยาย กันเม็ดสีและบล็อก JPEG ของเว็บแคมถูกขยายจนเป็นปื้น */
@@ -158,7 +158,7 @@
         try {
           const sc = s <= 2 ? 2 : 4;
           stage = 'โหลดไลบรารีหรือโมเดล'; await AI.prepare(sc, (p, t) => pg.set(15 + p * 10, t));
-          stage = 'ประมวลผลภาพ'; const ai = fit(await AI.upscale(base, sc, (p, eta) => pg.set(25 + p * 60, 'AI ขยายภาพ', eta)), ow, oh);
+          stage = 'ประมวลผลภาพ'; const ai = fit(await AI.upscale(base, sc, (p, eta) => pg.set(25 + p * 60, 'AI กำลังปรับคุณภาพ', eta)), ow, oh);
           stage = 'ผสมผลลัพธ์'; pg.set(88, 'ผสมผลลัพธ์กับการขยายแบบปกติ'); await sleep();
           if (str >= .999) c = ai;
           else { /* ผสม AI กับการขยายแบบนุ่ม ลดปื้นสีที่ AI แต่งขึ้นเอง */
@@ -166,7 +166,7 @@
             const x = c.getContext('2d'); x.globalAlpha = str; x.drawImage(ai, 0, 0, ow, oh); x.globalAlpha = 1;
           }
           await toneApply(c, enh, p => pg.set(89 + p * 5, 'ปรับแสงและสี')); await sleep();
-        } catch (e) { console.error(e); c = null; note = `ขยายด้วย AI ไม่สำเร็จ จึงขยายแบบธรรมดาแทน<br><small>ขั้นตอน: ${stage} · สาเหตุ: ${esc(e && e.message || e)}</small>` }
+        } catch (e) { console.error(e); c = null; note = `ปรับคุณภาพด้วย AI ไม่สำเร็จ จึงขยายแบบธรรมดาแทน<br><small>ขั้นตอน: ${stage} · สาเหตุ: ${esc(e && e.message || e)}</small>` }
       }
       if (!c) {
         pg.set(16, 'ปรับขนาด'); await sleep();
