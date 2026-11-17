@@ -1,4 +1,6 @@
 /* ขยายภาพด้วย ESRGAN-slim (โมเดลเล็ก ~1 MB) บน TensorFlow.js + WebGL แบ่งเป็นชิ้นเล็กเพื่อไม่กินแรม */
+/* tf.min.js มีโค้ดสำรอง Function("regeneratorRuntime = r") ซึ่ง CSP (ไม่มี unsafe-eval) บล็อก ประกาศตัวแปรไว้ก่อนเพื่อไม่ให้ไปถึงโค้ดนั้น */
+if(!('regeneratorRuntime' in self))self.regeneratorRuntime=undefined;
 window.AI = (() => {
   const models = {}; let backend = '';
   const supported = () => typeof WebAssembly === 'object' || !!document.createElement('canvas').getContext('webgl2');
@@ -66,7 +68,7 @@ window.AI = (() => {
   const abs = u => new URL(u, location.href).href;
   function getWorker() {
     if (worker) return worker;
-    worker = new Worker('js/ai.worker.js?v=7');
+    worker = new Worker('js/ai.worker.js?v=22');
     worker.onmessage = e => {
       const m = e.data, p = pend.get(m.id); if (!p) return;
       if (m.type === 'p') { p.cb && p.cb(m.p, m.t, m.eta) } else { pend.delete(m.id); m.type === 'err' ? p.no(new Error(m.msg)) : p.ok(m) }

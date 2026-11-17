@@ -5,7 +5,7 @@
   const COARSE = matchMedia('(pointer:coarse)').matches, MAXPX = COARSE ? 48e6 : 150e6, AIMAX = COARSE ? 1.5e6 : 4e6, WARPMAX = COARSE ? 4096 : 6000;
   const sleep = () => new Promise(r => setTimeout(r));
   const err = (t, b) => Popup.open({ icon: 'alert', tone: 'err', title: t, body: b });
-  const cv = $('#view');
+  const cv = $('#view'); cv.getContext('2d', { willReadFrequently: true });   // พรีวิวอ่านพิกเซลซ้ำทุกครั้งที่ปรับค่า
 
   /* ตรวจมุมเอียง: หามุมที่เส้นขอบขนานกันมากที่สุด */
   function detect(b) {

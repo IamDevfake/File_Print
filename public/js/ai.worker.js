@@ -1,4 +1,6 @@
 /* รันโมเดล AI ใน Web Worker เพื่อให้หน้าเว็บไม่ค้างตอนโหลดไลบรารี โหลดโมเดล และประมวลผล */
+/* tf.min.js มีโค้ดสำรอง Function("regeneratorRuntime = r") ซึ่ง CSP (ไม่มี unsafe-eval) บล็อก ประกาศตัวแปรไว้ก่อนเพื่อไม่ให้ไปถึงโค้ดนั้น */
+if(!('regeneratorRuntime' in self))self.regeneratorRuntime=undefined;
 let backend = ''; const models = {};
 const post = (m, t) => self.postMessage(m, t || []);
 const MISS = 'ไม่พบไฟล์ในเว็บ กำลังดาวน์โหลดอัตโนมัติ';

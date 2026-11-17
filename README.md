@@ -60,3 +60,6 @@
 
 ## ยังไม่มี
 - ตรวจมุมเอียงอัตโนมัติ ตรวจกรอบ ดึงภาพให้ตรง และปรับความคมยังทำในหน้าหลักแบบแบ่งช่วง (ยังไม่ย้ายเข้า Worker)
+
+## หมายเหตุเรื่อง CSP
+- `netlify.toml` ตั้ง `script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'` โดยไม่เปิด `unsafe-eval` ไลบรารี tf.min.js มีโค้ดสำรองที่ใช้ `Function(...)` จึงประกาศ `regeneratorRuntime` ไว้ก่อนใน `js/ai.js` และ `js/ai.worker.js` เพื่อไม่ให้โค้ดส่วนนั้นถูกเรียก ห้ามใส่ข้อความ CSP ลงในแท็ก `<script src>`
