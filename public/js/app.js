@@ -73,9 +73,9 @@
   function aiPlan(s, g) {
     if (document.querySelector('input[name=eng]:checked').value !== 'ai') return { use: false, msg: '' };
     if (!AI.supported()) return { use: false, msg: 'เครื่องนี้ไม่รองรับ AI จึงใช้แบบปกติแทน' };
-    if (s <= 1.05) return { use: false, msg: 'รูปนี้ไม่ต้องปรับคุณภาพ AI จึงยังไม่ทำงาน ใช้แบบปกติแทน' };
+    if (s <= 1.05) return { use: false, msg: 'ขนาดผลลัพธ์ไม่ใหญ่กว่ารูปเดิม AI จึงยังไม่ทำงาน ใช้แบบปกติแทน (เลือกขนาดให้ใหญ่ขึ้นเพื่อใช้ AI ปรับคุณภาพ)' };
     if (g.cw * g.ch > AIMAX) return { use: false, msg: `รูปต้นฉบับใหญ่เกิน ${AIMAX / 1e6} ล้านพิกเซล ใช้แบบปกติแทนเพื่อไม่ให้ช้าหรือแรมไม่พอ` };
-    return { use: true, msg: `จะใช้ AI คุณภาพ ${s.toFixed(1)} เท่าตอนบันทึกหรือพิมพ์ (ใช้เวลานานกว่าแบบปกติ จะแสดงเวลาที่เหลือ)` };
+    return { use: true, msg: `จะใช้ AI ปรับคุณภาพ (ขนาด ${s.toFixed(1)} เท่า) ตอนบันทึกหรือพิมพ์ (ใช้เวลานานกว่าแบบปกติ จะแสดงเวลาที่เหลือ)` };
   }
 
   /* ลดสัญญาณรบกวนแบบรักษาขอบ (bilateral) ก่อนขยาย กันเม็ดสีและบล็อก JPEG ของเว็บแคมถูกขยายจนเป็นปื้น */
@@ -158,7 +158,7 @@
         try {
           const sc = s <= 2 ? 2 : 4;
           stage = 'โหลดไลบรารีหรือโมเดล'; await AI.prepare(sc, (p, t) => pg.set(15 + p * 10, t));
-          stage = 'ประมวลผลภาพ'; const ai = fit(await AI.upscale(base, sc, (p, eta) => pg.set(25 + p * 60, 'AI กำลังปรับคุณภาพ', eta)), ow, oh);
+          stage = 'ประมวลผลภาพ'; const ai = fit(await AI.upscale(base, sc, (p, eta) => pg.set(25 + p * 60, 'AI ปรับคุณภาพภาพ', eta)), ow, oh);
           stage = 'ผสมผลลัพธ์'; pg.set(88, 'ผสมผลลัพธ์กับการขยายแบบปกติ'); await sleep();
           if (str >= .999) c = ai;
           else { /* ผสม AI กับการขยายแบบนุ่ม ลดปื้นสีที่ AI แต่งขึ้นเอง */
@@ -166,7 +166,7 @@
             const x = c.getContext('2d'); x.globalAlpha = str; x.drawImage(ai, 0, 0, ow, oh); x.globalAlpha = 1;
           }
           await toneApply(c, enh, p => pg.set(89 + p * 5, 'ปรับแสงและสี')); await sleep();
-        } catch (e) { console.error(e); c = null; note = `ปรับคุณภาพด้วย AI ไม่สำเร็จ จึงขยายแบบธรรมดาแทน<br><small>ขั้นตอน: ${stage} · สาเหตุ: ${esc(e && e.message || e)}</small>` }
+        } catch (e) { console.error(e); c = null; note = `ปรับคุณภาพด้วย AI ไม่สำเร็จ จึงใช้แบบธรรมดาแทน<br><small>ขั้นตอน: ${stage} · สาเหตุ: ${esc(e && e.message || e)}</small>` }
       }
       if (!c) {
         pg.set(16, 'ปรับขนาด'); await sleep();
@@ -451,7 +451,58 @@
   function setMir(v) { mir = v; vid.classList.toggle('mir', v); $('#mirror').textContent = v ? 'ขวา' : 'ซ้าย'; $('#mirror').setAttribute('aria-label', 'ทิศทางภาพ ตอนนี้ ' + (v ? 'ขวาไปซ้าย (กลับด้าน)' : 'ซ้ายไปขวา (ปกติ)') + ' กดเพื่อสลับ'); $('#mirror').setAttribute('aria-pressed', v) }
   const vid = $('#vid');
   setMir(true);   /* กลับซ้าย-ขวาเป็นค่าเริ่มต้น (เหมือนกระจก) ปิดได้ด้วยปุ่ม */
-  function stopCam() { stream && stream.getTracks().forEach(t => t.stop()); stream = null; vid.srcObject = null }
+  function stopCam() {
+    stream && stream.getTracks().forEach(t => t.stop()); stream = null;
+    try { vid.srcObject = null } catch { }
+    if (vid.dataset.u) { try { URL.revokeObjectURL(vid.dataset.u) } catch { } delete vid.dataset.u; vid.removeAttribute('src') }
+    camFull(false);
+  }
+  /* ---- ความเข้ากันได้ของเบราว์เซอร์ ---- */
+  /* เบราว์เซอร์รุ่นเก่ามีเฉพาะ navigator.getUserMedia (มี/ไม่มี prefix) ห่อให้ใช้แบบ Promise เหมือนกัน */
+  const legacyGUM = () => navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia;
+  const hasCam = () => !!((navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || legacyGUM());
+  function getMedia(c) {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) return navigator.mediaDevices.getUserMedia(c);
+    const g = legacyGUM(); return new Promise((ok, no) => g.call(navigator, c, ok, no));
+  }
+  /* ขอความละเอียดสูงก่อน ถ้าเบราว์เซอร์/กล้องรับเงื่อนไขไม่ได้ (Safari, Firefox, Android บางรุ่น) ลดเงื่อนไขลงทีละขั้น
+     แต่ไม่ลองซ้ำเมื่อผู้ใช้ปฏิเสธสิทธิ์หรือไม่มีกล้อง */
+  async function openStream() {
+    const tries = [
+      { audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 4096 }, height: { ideal: 2160 } } },
+      { audio: false, video: { facingMode: { ideal: facing } } },
+      { audio: false, video: true }
+    ];
+    let last;
+    for (const c of tries) {
+      try { return await getMedia(c) }
+      catch (e) { last = e; if (['NotAllowedError', 'PermissionDeniedError', 'SecurityError', 'NotFoundError', 'DevicesNotFoundError'].includes(e && e.name)) throw e }
+    }
+    throw last;
+  }
+  function attach(st) {
+    if ('srcObject' in vid) vid.srcObject = st;
+    else { const u = URL.createObjectURL(st); vid.dataset.u = u; vid.src = u }
+  }
+  const toBlobSafe = (c, type, q) => new Promise(r => {
+    if (c.toBlob) return c.toBlob(r, type, q);
+    try { const [h, b] = c.toDataURL(type, q).split(','), bin = atob(b), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++)u[i] = bin.charCodeAt(i); r(new Blob([u], { type: h.slice(5, h.indexOf(';')) })) } catch { r(null) }
+  });
+  /* ---- ขยายกล้องเต็มจอ: ใช้ Fullscreen API ถ้ามี (มี prefix สำหรับ Safari) และมีโหมดเต็มหน้าต่างด้วย CSS สำรอง
+     สำหรับ iPhone Safari ที่ใช้ Fullscreen API กับองค์ประกอบทั่วไปไม่ได้ ---- */
+  const camEl = $('#cam'), fsEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+  function camFull(on) {
+    on = !!on; const was = camEl.classList.contains('full');
+    camEl.classList.toggle('full', on); document.documentElement.classList.toggle('camlock', on);
+    const b = $('#camfull'); b.textContent = on ? 'ย่อ' : 'เต็มจอ'; b.setAttribute('aria-pressed', on); b.setAttribute('aria-label', on ? 'ย่อกล้องกลับ' : 'ขยายกล้องเต็มจอ');
+    try {
+      if (on && !was) { const r = camEl.requestFullscreen || camEl.webkitRequestFullscreen; if (r) { const p = r.call(camEl); p && p.catch && p.catch(() => { }) } }
+      else if (!on && fsEl()) { const x = document.exitFullscreen || document.webkitExitFullscreen; if (x) { const p = x.call(document); p && p.catch && p.catch(() => { }) } }
+    } catch { }
+  }
+  const fsChange = () => { if (!fsEl() && camEl.classList.contains('full') && camEl.dataset.fs) camFull(false); camEl.dataset.fs = fsEl() ? '1' : '' };
+  document.addEventListener('fullscreenchange', fsChange); document.addEventListener('webkitfullscreenchange', fsChange);
+  addEventListener('keydown', e => { if (e.key === 'Escape' && camEl.classList.contains('full')) camFull(false) });
   function setTab(m) { const c = m === 'cam'; $('#drop').hidden = c; $('#cam').hidden = !c; c ? startCam() : stopCam() }
   function showSrc(m) { show('src'); $('#back').hidden = !S.bmp; setTab(m) }
   async function camFail(why) {
@@ -472,12 +523,15 @@
   }
   async function startCam() {
     stopCam();
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
-      return camFail('เบราว์เซอร์นี้เปิดกล้องผ่านหน้าเว็บไม่ได้ หรือหน้าเว็บไม่ได้เปิดแบบ HTTPS คุณยังถ่ายด้วยแอปกล้องของเครื่องแล้วนำรูปเข้ามาได้');
+    if (!hasCam())
+      return camFail('เบราว์เซอร์นี้เปิดกล้องผ่านหน้าเว็บไม่ได้ หรือหน้าเว็บไม่ได้เปิดแบบ HTTPS (แอปอย่าง LINE หรือ Facebook มักบล็อกกล้อง ลองเปิดลิงก์ด้วย Chrome/Safari) คุณยังถ่ายด้วยแอปกล้องของเครื่องแล้วนำรูปเข้ามาได้');
     try {
-      const st = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 4096 }, height: { ideal: 2160 } } });
+      const st = await openStream();
       if ($('#cam').hidden) { st.getTracks().forEach(t => t.stop()); return }   // ผู้ใช้สลับแท็บไปแล้วระหว่างรออนุญาต
-      stream = st; vid.srcObject = st; await vid.play().catch(() => { });
+      stream = st; vid.muted = true; vid.setAttribute('playsinline', ''); vid.setAttribute('webkit-playsinline', ''); attach(st);
+      await new Promise(ok => { if (vid.videoWidth) return ok(); const f = () => { vid.removeEventListener('loadedmetadata', f); ok() }; vid.addEventListener('loadedmetadata', f); setTimeout(ok, 4000) });
+      await vid.play().catch(() => { });
+      const trk = st.getVideoTracks()[0]; if (trk) trk.onended = () => { if (stream === st && !$('#cam').hidden) camFail('กล้องหยุดทำงาน (อาจถูกโปรแกรมอื่นใช้หรือถอดออก) ลองเปิดใหม่อีกครั้ง') };
       try { /* ให้กล้องปรับโฟกัส แสง และสีขาวต่อเนื่อง ถ้ากล้องรองรับ */
         const tr = st.getVideoTracks()[0], cap = tr.getCapabilities ? tr.getCapabilities() : {}, adv = {};
         for (const k of ['focusMode', 'exposureMode', 'whiteBalanceMode']) if (cap[k] && cap[k].includes('continuous')) adv[k] = 'continuous';
@@ -489,7 +543,8 @@
     } catch (e) {
       const m = {
         NotAllowedError: 'ไม่ได้รับอนุญาตให้ใช้กล้อง กดไอคอนข้างช่องที่อยู่เว็บเพื่ออนุญาต แล้วลองใหม่',
-        NotFoundError: 'ไม่พบกล้องในเครื่องนี้', NotReadableError: 'กล้องถูกโปรแกรมอื่นใช้งานอยู่ ปิดโปรแกรมนั้นแล้วลองใหม่'
+        NotFoundError: 'ไม่พบกล้องในเครื่องนี้', DevicesNotFoundError: 'ไม่พบกล้องในเครื่องนี้', PermissionDeniedError: 'ไม่ได้รับอนุญาตให้ใช้กล้อง กดไอคอนข้างช่องที่อยู่เว็บเพื่ออนุญาต แล้วลองใหม่',
+        SecurityError: 'เบราว์เซอร์ไม่อนุญาตให้ใช้กล้องในหน้านี้ ต้องเปิดผ่าน HTTPS และไม่ใช่เบราว์เซอร์ในแอปแชต', NotReadableError: 'กล้องถูกโปรแกรมอื่นใช้งานอยู่ ปิดโปรแกรมนั้นแล้วลองใหม่'
       }[e.name];
       camFail(m || 'เปิดกล้องไม่สำเร็จ (' + esc2(e && e.message || e) + ')');
     }
@@ -507,14 +562,14 @@
     if (!blob) {
       const c = document.createElement('canvas'); c.width = vid.videoWidth; c.height = vid.videoHeight;
       c.getContext('2d').drawImage(vid, 0, 0);
-      blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .95));
+      blob = await toBlobSafe(c, 'image/jpeg', .95);
     }
     if (!blob) return err('ถ่ายรูปไม่สำเร็จ', 'ลองถ่ายใหม่อีกครั้ง');
     if (mir) { /* ให้รูปที่บันทึกตรงกับที่เห็นบนจอ (กลับซ้าย-ขวา) */
       try {
         const bm = await createImageBitmap(blob), fc = document.createElement('canvas'); fc.width = bm.width; fc.height = bm.height;
         const fx = fc.getContext('2d'); fx.translate(bm.width, 0); fx.scale(-1, 1); fx.drawImage(bm, 0, 0); bm.close();
-        blob = await new Promise(r => fc.toBlob(r, 'image/jpeg', .95)) || blob;
+        blob = await toBlobSafe(fc, 'image/jpeg', .95) || blob;
       } catch (e) { console.warn(e) }
     }
     const d = new Date(), p = n => String(n).padStart(2, '0');
@@ -534,6 +589,13 @@
   $('#native').onclick = () => $('#shot').click();
   $('#shot').onchange = e => { load(e.target.files[0]); e.target.value = '' };
   addEventListener('pagehide', stopCam);
+  /* iOS/Android หยุดกล้องเมื่อสลับแอปหรือพับจอ พอกลับมาที่หน้านี้ให้เปิดกล้องต่ออัตโนมัติ */
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || $('#cam').hidden) return;
+    const t = stream && stream.getVideoTracks()[0]; if (!stream || !t || t.readyState !== 'live') startCam();
+  });
+  $('#camfull').onclick = () => camFull(!camEl.classList.contains('full'));
+  vid.ondblclick = () => camFull(!camEl.classList.contains('full'));
   const syncAI = () => { $('#aistr').hidden = document.querySelector('input[name=eng]:checked').value !== 'ai' };
   document.querySelectorAll('input[name=eng]').forEach(r => r.onchange = () => { syncAI(); update() });
   $('#dn').onchange = update; $('#enh').onchange = update; $('#ais').oninput = e => { $('#aisv').textContent = e.target.value + '%'; update() }; syncAI();

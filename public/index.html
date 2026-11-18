@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>File Print</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23808080' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 6 2 18 2 18 9'></polyline><path d='M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2'></path><rect x='6' y='14' width='12' height='8'></rect></svg>">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=24">
 </head>
 
 <body>
@@ -28,6 +28,7 @@
           <p id="camnote" class="note"></p>
           <div class="row">
             <button id="shoot" class="btn pri" data-ic="camera"> ถ่ายรูป</button>
+            <button id="camfull" class="btn" type="button" aria-pressed="false" aria-label="ขยายกล้องเต็มจอ">เต็มจอ</button>
             <button id="flip" class="btn" type="button">กล้องหน้า</button>
             <button id="mirror" class="btn" type="button" aria-pressed="true">ขวา → ซ้าย</button>
             <button id="native" class="btn">ใช้แอปกล้องของเครื่อง</button>
@@ -75,11 +76,11 @@
           <input id="cw" type="number" min="200" max="16000" placeholder="ด้านยาว (px)" hidden>
         </div>
         <div class="grp" role="radiogroup" aria-labelledby="englb"><span id="englb"
-            class="lb">วิธีปรับคุณภาพตอนขยายรูป</span>
+            class="lb">วิธีปรับคุณภาพรูป</span>
           <label class="opt"><input type="radio" name="eng" value="normal" checked><span><b>ปกติ
                 (ไลบรารีของเบราว์เซอร์)</b><small>เร็ว ไม่ต้องโหลดอะไรเพิ่ม</small></span></label>
           <label class="opt"><input type="radio" name="eng" value="ai" id="engai"><span><b>AI ในเครื่อง</b><small>โมเดล
-                ESRGAN-slim เติมรายละเอียดให้คมกว่า โหลดครั้งแรกราว 2–3 MB แล้วเก็บในเครื่อง
+                ESRGAN-slim ปรับคุณภาพให้คมชัดขึ้น (ทำงานเมื่อเลือกขนาดผลลัพธ์ใหญ่กว่ารูปเดิม) โหลดครั้งแรกราว 2–3 MB แล้วเก็บในเครื่อง
                 รูปไม่ถูกอัปโหลด</small></span></label>
           <p id="engnote" class="note" aria-live="polite"></p>
         </div>
@@ -124,7 +125,7 @@
   <script src="js/icons.js?v=22"></script>
   <script src="js/popup.js?v=22"></script>
   <script src="js/ai.js?v=23"></script>
-  <script src="js/app.js?v=22"></script>
+  <script src="js/app.js?v=24"></script>
 </body>
 
 </html>
