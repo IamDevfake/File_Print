@@ -47,20 +47,45 @@ window.AI = (() => {
     }
     cb(1, 'พร้อมแล้ว (' + ({ webgl: 'การ์ดจอ', wasm: 'WASM', cpu: 'CPU ช้า' })[backend] + ')');
   }
+  /* ตรวจชิ้นที่ได้จากโมเดล (เหมือนใน ai.worker.js) กันปื้นดำ/เขียว/เทาจากการคำนวณบน GPU ผิดพลาด */
+  function tileOK(d, ow, oh, idata) {
+    const n = ow * oh; let a = 0, b = 0, c = 0;
+    for (let i = 0; i < d.length; i += 3) {
+      const r = d[i], g = d[i + 1], u = d[i + 2];
+      if (!(r >= 0 && r <= 1 && g >= 0 && g <= 1 && u >= 0 && u <= 1)) return false;
+      a += r; b += g; c += u;
+    }
+    const s = idata.data, m = s.length / 4; let r0 = 0, g0 = 0, b0 = 0;
+    for (let i = 0; i < s.length; i += 4) { r0 += s[i]; g0 += s[i + 1]; b0 += s[i + 2] }
+    const k = 1 / (255 * m);
+    return Math.abs(a / n - r0 * k) < .15 && Math.abs(b / n - g0 * k) < .15 && Math.abs(c / n - b0 * k) < .15;
+  }
+  async function inferInline(m, idata) {
+    const t = tf.tidy(() => m.predict(tf.browser.fromPixels(idata).toFloat().div(255).expandDims(0)).squeeze().clipByValue(0, 1));
+    const [oh, ow] = t.shape, d = await t.data(); t.dispose();
+    return { d, ow, oh };
+  }
   async function upscaleInline(src, sc, cb) {
     const m = models[sc], W = src.width, H = src.height, T = 96, P = 8;
     const out = document.createElement('canvas'); out.width = W * sc; out.height = H * sc;
-    const o = out.getContext('2d'), tc = document.createElement('canvas'), tx2 = tc.getContext('2d'), oc = document.createElement('canvas');
-    const nx = Math.ceil(W / T), ny = Math.ceil(H / T), tot = nx * ny, t0 = performance.now(); let n = 0;
+    const o = out.getContext('2d'); o.imageSmoothingQuality = 'high';
+    const sx = src.getContext('2d', { willReadFrequently: true });
+    const nx = Math.ceil(W / T), ny = Math.ceil(H / T), tot = nx * ny, t0 = performance.now(); let n = 0, fixed = 0;
     for (let ty = 0; ty < ny; ty++)for (let tx = 0; tx < nx; tx++) {
       const x = tx * T, y = ty * T, w = Math.min(T, W - x), h = Math.min(T, H - y);
       const x0 = Math.max(0, x - P), y0 = Math.max(0, y - P), x1 = Math.min(W, x + w + P), y1 = Math.min(H, y + h + P);
-      tc.width = x1 - x0; tc.height = y1 - y0; tx2.drawImage(src, x0, y0, tc.width, tc.height, 0, 0, tc.width, tc.height);
-      const t = tf.tidy(() => m.predict(tf.browser.fromPixels(tc).toFloat().div(255).expandDims(0)).squeeze().clipByValue(0, 1));
-      await tf.browser.toPixels(t, oc); t.dispose();
-      o.drawImage(oc, (x - x0) * sc, (y - y0) * sc, w * sc, h * sc, x * sc, y * sc, w * sc, h * sc);
+      const idata = sx.getImageData(x0, y0, x1 - x0, y1 - y0);
+      let r = null;
+      for (let a = 0; a < 2 && !r; a++) { const q = await inferInline(m, idata); if (tileOK(q.d, q.ow, q.oh, idata)) r = q }
+      if (r) {
+        const { d, ow, oh } = r, px = new Uint8ClampedArray(ow * oh * 4);
+        for (let i = 0, a = 0, b = 0; i < ow * oh; i++) { px[b++] = d[a++] * 255; px[b++] = d[a++] * 255; px[b++] = d[a++] * 255; px[b++] = 255 }
+        const oc = document.createElement('canvas'); oc.width = ow; oc.height = oh; oc.getContext('2d').putImageData(new ImageData(px, ow, oh), 0, 0);
+        o.drawImage(oc, (x - x0) * sc, (y - y0) * sc, w * sc, h * sc, x * sc, y * sc, w * sc, h * sc);
+      } else { fixed++; o.drawImage(src, x, y, w, h, x * sc, y * sc, w * sc, h * sc) }
       n++; cb(n / tot, n >= 3 ? (performance.now() - t0) / 1000 / n * (tot - n) : null);
     }
+    if (fixed) console.warn('AI: ชิ้นที่ผลลัพธ์ผิดปกติและใช้การขยายปกติแทน', fixed, '/', tot);
     return out;
   }
   /* ใช้ Web Worker เป็นหลัก (ไม่ทำให้หน้าเว็บค้าง) ถ้าเบราว์เซอร์ไม่รองรับหรือ worker ใช้ไม่ได้ จะถอยไปรันในหน้าหลักแบบเดิม */
@@ -68,7 +93,7 @@ window.AI = (() => {
   const abs = u => new URL(u, location.href).href;
   function getWorker() {
     if (worker) return worker;
-    worker = new Worker('js/ai.worker.js?v=22');
+    worker = new Worker('js/ai.worker.js?v=23');
     worker.onmessage = e => {
       const m = e.data, p = pend.get(m.id); if (!p) return;
       if (m.type === 'p') { p.cb && p.cb(m.p, m.t, m.eta) } else { pend.delete(m.id); m.type === 'err' ? p.no(new Error(m.msg)) : p.ok(m) }
@@ -97,7 +122,9 @@ window.AI = (() => {
     const id = src.getContext('2d').getImageData(0, 0, src.width, src.height);
     const m = await call({ type: 'upscale', sc, w: src.width, h: src.height, buf: id.data.buffer }, (p, t, eta) => cb(p, eta), [id.data.buffer]);
     const c = document.createElement('canvas'); c.width = m.bmp.width; c.height = m.bmp.height;
-    c.getContext('2d').drawImage(m.bmp, 0, 0); m.bmp.close(); return c;
+    c.getContext('2d').drawImage(m.bmp, 0, 0); m.bmp.close();
+    if (m.fixed) console.warn('AI: ชิ้นที่ผลลัพธ์ผิดปกติและใช้การขยายปกติแทน', m.fixed);
+    return c;
   }
   return { supported, prepare, upscale };
 })();
