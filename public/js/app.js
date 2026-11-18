@@ -1,5 +1,52 @@
 (() => {
   const $ = s => document.querySelector(s), S = { bmp: null, name: '', a: 0, result: null };
+
+  /* ---------- เบราว์เซอร์ในแอปแชท (LINE, Facebook, Messenger, Instagram, TikTok ฯลฯ) ----------
+     เบราว์เซอร์ในแอปเหล่านี้มักบล็อกกล้องผ่านเว็บ ดาวน์โหลดไฟล์ และสั่งพิมพ์ จึงตรวจจับแล้วเปลี่ยนวิธีให้ใช้งานได้ */
+  const IAB = (() => {
+    const ua = navigator.userAgent || '', ios = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1), android = /Android/i.test(ua);
+    const list = [['LINE', /\bLine\//i], ['Facebook', /FBAN|FBAV|FB_IAB|FBIOS|FB4A/], ['Messenger', /Orca-Android|MessengerLite|MESSENGER/i], ['Instagram', /Instagram/i],
+      ['TikTok', /musical_ly|TikTok|Bytedance/i], ['WeChat', /MicroMessenger/i], ['Snapchat', /Snapchat/i], ['X (Twitter)', /Twitter/i], ['KakaoTalk', /KAKAOTALK/i], ['Zalo', /Zalo/i], ['Telegram', /Telegram/i]];
+    const hit = list.find(([, r]) => r.test(ua));
+    /* แอปอื่นที่ไม่ระบุชื่อ: Android WebView มี "; wv)" ส่วน iOS WebView ไม่มีคำว่า Safari/ */
+    const generic = !hit && ((android && /; wv\)/.test(ua)) || (ios && /AppleWebKit/.test(ua) && !/Safari\//.test(ua)));
+    return { is: !!(hit || generic), name: hit ? hit[0] : 'แอปนี้', line: !!(hit && hit[0] === 'LINE'), ios, android };
+  })();
+  async function copyLink() {
+    const u = location.href;
+    try { await navigator.clipboard.writeText(u); return true } catch { }
+    try { const t = document.createElement('textarea'); t.value = u; t.style.cssText = 'position:fixed;opacity:0'; document.body.append(t); t.select(); t.setSelectionRange(0, 1e5); const ok = document.execCommand('copy'); t.remove(); return ok } catch { return false }
+  }
+  /* พยายามเปิดหน้านี้ใน Chrome/Safari จริง: LINE ใช้พารามิเตอร์ openExternalBrowser, Android ใช้ intent ไป Chrome, iOS ไม่มีทางบังคับ จึงแนะนำให้เปิดเอง */
+  async function openExternal() {
+    const u = new URL(location.href);
+    if (IAB.line) { u.searchParams.set('openExternalBrowser', '1'); location.href = u.href; return }
+    if (IAB.android) { location.href = `intent://${u.host}${u.pathname}${u.search}${u.hash}#Intent;scheme=${u.protocol.slice(0, -1)};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(u.href)};end`; return }
+    const ok = await copyLink();
+    Popup.open({ icon: 'info', title: 'เปิดด้วย Safari', body: (ok ? 'คัดลอกลิงก์แล้ว ' : '') + `แตะไอคอน ⋯ หรือรูปเข็มทิศ/แชร์ที่มุมจอของ ${IAB.name} แล้วเลือก <b>เปิดใน Safari</b> หรือวางลิงก์ในเบราว์เซอร์ที่ต้องการ` });
+  }
+  function iabBanner() {
+    let seen = false; try { seen = sessionStorage.getItem('iabX') === '1' } catch { }
+    if (!IAB.is || seen) return;
+    const b = document.createElement('div'); b.className = 'iab'; b.setAttribute('role', 'region'); b.setAttribute('aria-label', 'คำแนะนำสำหรับเบราว์เซอร์ในแอป');
+    b.innerHTML = `<p><b>คุณเปิดผ่าน ${IAB.name}</b> กล้อง การบันทึกรูป และการพิมพ์อาจใช้ไม่ได้ในหน้าต่างนี้ แนะนำให้เปิดด้วย ${IAB.ios ? 'Safari' : 'Chrome'}</p><div class="row"></div>`;
+    const row = b.querySelector('.row'), mk = (t, f, pri) => { const x = document.createElement('button'); x.type = 'button'; x.className = 'btn' + (pri ? ' pri' : ''); x.textContent = t; x.onclick = f; row.append(x) };
+    mk('เปิดในเบราว์เซอร์', openExternal, true);
+    mk('คัดลอกลิงก์', async () => { const ok = await copyLink(); err(ok ? 'คัดลอกลิงก์แล้ว' : 'คัดลอกไม่ได้', ok ? 'นำไปวางในเบราว์เซอร์ที่ต้องการได้เลย' : 'กดค้างที่ช่องที่อยู่เว็บแล้วเลือกคัดลอกเอง') });
+    mk('ปิด', () => { b.remove(); try { sessionStorage.setItem('iabX', '1') } catch { } });
+    document.body.prepend(b);
+  }
+  /* ในแอปแชทการดาวน์โหลดไฟล์มักไม่ทำงาน: แสดงรูปให้กดค้างบันทึกลงอัลบั้ม และมีปุ่มแชร์ถ้าเบราว์เซอร์รองรับ */
+  async function saveInApp(blob, name) {
+    const u = URL.createObjectURL(blob), box = document.createElement('div'), f = new File([blob], name, { type: blob.type });
+    box.innerHTML = `<p style="margin:0 0 8px">เบราว์เซอร์ใน ${IAB.name} ดาวน์โหลดไฟล์ตรง ๆ ไม่ได้ <b>กดค้างที่รูปด้านล่าง แล้วเลือกบันทึกรูป</b> หรือกดแชร์</p><img alt="รูปผลลัพธ์" style="display:block;width:100%;max-height:50vh;object-fit:contain;background:#000;border-radius:8px;-webkit-touch-callout:default;-webkit-user-select:auto;user-select:auto">`;
+    box.querySelector('img').src = u;
+    const acts = [{ label: 'ปิด', value: false }];
+    if (navigator.canShare && navigator.canShare({ files: [f] })) acts.push({ label: 'แชร์ / บันทึก', primary: true, value: () => { navigator.share({ files: [f] }).catch(() => { }); return false } });
+    acts.push({ label: 'เปิดในเบราว์เซอร์', value: () => { openExternal(); return false } });
+    await Popup.open({ icon: 'check', tone: 'ok', title: 'บันทึกรูป', body: box, actions: acts });
+    setTimeout(() => URL.revokeObjectURL(u), 6e4);
+  }
   const RES = { orig: 0, hd: 1920, '2k': 2560, '4k': 3840 }, MAX = 16384;
   /* อุปกรณ์จอสัมผัส (มือถือ/แท็บเล็ต) แรมและขีดจำกัด canvas น้อยกว่า จึงตั้งเพดานต่ำลง */
   const COARSE = matchMedia('(pointer:coarse)').matches, MAXPX = COARSE ? 48e6 : 150e6, AIMAX = COARSE ? 1.5e6 : 4e6, WARPMAX = COARSE ? 4096 : 6000;
@@ -73,9 +120,9 @@
   function aiPlan(s, g) {
     if (document.querySelector('input[name=eng]:checked').value !== 'ai') return { use: false, msg: '' };
     if (!AI.supported()) return { use: false, msg: 'เครื่องนี้ไม่รองรับ AI จึงใช้แบบปกติแทน' };
-    if (s <= 1.05) return { use: false, msg: 'รูปนี้ไม่ต้องขยาย AI จึงยังไม่ทำงาน ใช้แบบปกติแทน' };
+    if (s <= 1.05) return { use: false, msg: 'ขนาดผลลัพธ์ไม่ใหญ่กว่ารูปเดิม AI จึงยังไม่ทำงาน ใช้แบบปกติแทน (เลือกขนาดให้ใหญ่ขึ้นเพื่อใช้ AI ปรับคุณภาพ)' };
     if (g.cw * g.ch > AIMAX) return { use: false, msg: `รูปต้นฉบับใหญ่เกิน ${AIMAX / 1e6} ล้านพิกเซล ใช้แบบปกติแทนเพื่อไม่ให้ช้าหรือแรมไม่พอ` };
-    return { use: true, msg: `จะใช้ AI ขยาย ${s.toFixed(1)} เท่าตอนบันทึกหรือพิมพ์ (ใช้เวลานานกว่าแบบปกติ จะแสดงเวลาที่เหลือ)` };
+    return { use: true, msg: `จะใช้ AI ปรับคุณภาพ (ขนาด ${s.toFixed(1)} เท่า) ตอนบันทึกหรือพิมพ์ (ใช้เวลานานกว่าแบบปกติ จะแสดงเวลาที่เหลือ)` };
   }
 
   /* ลดสัญญาณรบกวนแบบรักษาขอบ (bilateral) ก่อนขยาย กันเม็ดสีและบล็อก JPEG ของเว็บแคมถูกขยายจนเป็นปื้น */
@@ -158,7 +205,7 @@
         try {
           const sc = s <= 2 ? 2 : 4;
           stage = 'โหลดไลบรารีหรือโมเดล'; await AI.prepare(sc, (p, t) => pg.set(15 + p * 10, t));
-          stage = 'ประมวลผลภาพ'; const ai = fit(await AI.upscale(base, sc, (p, eta) => pg.set(25 + p * 60, 'AI ขยายภาพ', eta)), ow, oh);
+          stage = 'ประมวลผลภาพ'; const ai = fit(await AI.upscale(base, sc, (p, eta) => pg.set(25 + p * 60, 'AI ปรับคุณภาพภาพ', eta)), ow, oh);
           stage = 'ผสมผลลัพธ์'; pg.set(88, 'ผสมผลลัพธ์กับการขยายแบบปกติ'); await sleep();
           if (str >= .999) c = ai;
           else { /* ผสม AI กับการขยายแบบนุ่ม ลดปื้นสีที่ AI แต่งขึ้นเอง */
@@ -166,7 +213,7 @@
             const x = c.getContext('2d'); x.globalAlpha = str; x.drawImage(ai, 0, 0, ow, oh); x.globalAlpha = 1;
           }
           await toneApply(c, enh, p => pg.set(89 + p * 5, 'ปรับแสงและสี')); await sleep();
-        } catch (e) { console.error(e); c = null; note = `ขยายด้วย AI ไม่สำเร็จ จึงขยายแบบธรรมดาแทน<br><small>ขั้นตอน: ${stage} · สาเหตุ: ${esc(e && e.message || e)}</small>` }
+        } catch (e) { console.error(e); c = null; note = `ปรับคุณภาพด้วย AI ไม่สำเร็จ จึงใช้แบบธรรมดาแทน<br><small>ขั้นตอน: ${stage} · สาเหตุ: ${esc(e && e.message || e)}</small>` }
       }
       if (!c) {
         pg.set(16, 'ปรับขนาด'); await sleep();
@@ -223,6 +270,7 @@
     const blob = await new Promise(r => c.toBlob(r, mime, $('#q').value / 100)); pg.close();
     if (blob && !handle) { const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[blob.type]; if (ext) name = name.replace(/\.\w+$/, '.' + ext) }
     if (!blob) return err('สร้างไฟล์ไม่ได้', 'ลองเปลี่ยนรูปแบบไฟล์หรือลดความละเอียด');
+    if (IAB.is && !handle) return saveInApp(blob, name);
     try {
       if (handle) { const w = await handle.createWritable(); await w.write(blob); await w.close() }
       else { const u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u), 6e4) }
@@ -243,6 +291,7 @@
   }
   const PAPER = { A4: [210, 297], A5: [148, 210], Letter: [216, 279], '4x6': [102, 152] };
   async function print() {
+    if (IAB.is || typeof window.print !== 'function') return Popup.open({ icon: 'printer', title: 'พิมพ์ไม่ได้ในแอปนี้', body: `เบราว์เซอร์ใน ${IAB.name} สั่งพิมพ์ไม่ได้ เปิดหน้านี้ด้วย ${IAB.ios ? 'Safari' : 'Chrome'} แล้วลองใหม่ หรือบันทึกรูปแล้วพิมพ์จากแอปอัลบั้ม`, actions: [{ label: 'ปิด', value: false }, { label: 'เปิดในเบราว์เซอร์', primary: true, value: () => { openExternal(); return false } }] });
     const c = await ensure(); if (!c) return;
     const land = c.width > c.height, box = document.createElement('div');
     box.className = 'pf';
@@ -451,13 +500,66 @@
   function setMir(v) { mir = v; vid.classList.toggle('mir', v); $('#mirror').textContent = v ? 'ขวา' : 'ซ้าย'; $('#mirror').setAttribute('aria-label', 'ทิศทางภาพ ตอนนี้ ' + (v ? 'ขวาไปซ้าย (กลับด้าน)' : 'ซ้ายไปขวา (ปกติ)') + ' กดเพื่อสลับ'); $('#mirror').setAttribute('aria-pressed', v) }
   const vid = $('#vid');
   setMir(true);   /* กลับซ้าย-ขวาเป็นค่าเริ่มต้น (เหมือนกระจก) ปิดได้ด้วยปุ่ม */
-  function stopCam() { stream && stream.getTracks().forEach(t => t.stop()); stream = null; vid.srcObject = null }
+  function stopCam() {
+    stream && stream.getTracks().forEach(t => t.stop()); stream = null;
+    try { vid.srcObject = null } catch { }
+    if (vid.dataset.u) { try { URL.revokeObjectURL(vid.dataset.u) } catch { } delete vid.dataset.u; vid.removeAttribute('src') }
+    camFull(false);
+  }
+  /* ---- ความเข้ากันได้ของเบราว์เซอร์ ---- */
+  /* เบราว์เซอร์รุ่นเก่ามีเฉพาะ navigator.getUserMedia (มี/ไม่มี prefix) ห่อให้ใช้แบบ Promise เหมือนกัน */
+  const legacyGUM = () => navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia;
+  const hasCam = () => !!((navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || legacyGUM());
+  function getMedia(c) {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) return navigator.mediaDevices.getUserMedia(c);
+    const g = legacyGUM(); return new Promise((ok, no) => g.call(navigator, c, ok, no));
+  }
+  /* ขอความละเอียดสูงก่อน ถ้าเบราว์เซอร์/กล้องรับเงื่อนไขไม่ได้ (Safari, Firefox, Android บางรุ่น) ลดเงื่อนไขลงทีละขั้น
+     แต่ไม่ลองซ้ำเมื่อผู้ใช้ปฏิเสธสิทธิ์หรือไม่มีกล้อง */
+  async function openStream() {
+    /* เบราว์เซอร์ในแอป (WebView) แสดงวิดีโอที่ด้านใดด้านหนึ่งเกิน 2048 พิกเซลไม่ได้ จะเห็นเป็นช่องสีเขียวบางส่วน จึงจำกัดไว้ไม่เกิน 2048 */
+    const big = IAB.is ? { width: { ideal: 2048, max: 2048 }, height: { ideal: 2048, max: 2048 } } : { width: { ideal: 4096 }, height: { ideal: 2160 } };
+    const tries = [
+      { audio: false, video: { facingMode: { ideal: facing }, ...big } },
+      { audio: false, video: { facingMode: { ideal: facing } } },
+      { audio: false, video: true }
+    ];
+    let last;
+    for (const c of tries) {
+      try { return await getMedia(c) }
+      catch (e) { last = e; if (['NotAllowedError', 'PermissionDeniedError', 'SecurityError', 'NotFoundError', 'DevicesNotFoundError'].includes(e && e.name)) throw e }
+    }
+    throw last;
+  }
+  function attach(st) {
+    if ('srcObject' in vid) vid.srcObject = st;
+    else { const u = URL.createObjectURL(st); vid.dataset.u = u; vid.src = u }
+  }
+  const toBlobSafe = (c, type, q) => new Promise(r => {
+    if (c.toBlob) return c.toBlob(r, type, q);
+    try { const [h, b] = c.toDataURL(type, q).split(','), bin = atob(b), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++)u[i] = bin.charCodeAt(i); r(new Blob([u], { type: h.slice(5, h.indexOf(';')) })) } catch { r(null) }
+  });
+  /* ---- ขยายกล้องเต็มจอ: ใช้ Fullscreen API ถ้ามี (มี prefix สำหรับ Safari) และมีโหมดเต็มหน้าต่างด้วย CSS สำรอง
+     สำหรับ iPhone Safari ที่ใช้ Fullscreen API กับองค์ประกอบทั่วไปไม่ได้ ---- */
+  const camEl = $('#cam'), fsEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+  function camFull(on) {
+    on = !!on; const was = camEl.classList.contains('full');
+    camEl.classList.toggle('full', on); document.documentElement.classList.toggle('camlock', on);
+    const b = $('#camfull'); b.textContent = on ? 'ย่อ' : 'เต็มจอ'; b.setAttribute('aria-pressed', on); b.setAttribute('aria-label', on ? 'ย่อกล้องกลับ' : 'ขยายกล้องเต็มจอ');
+    try {
+      if (on && !was) { const r = camEl.requestFullscreen || camEl.webkitRequestFullscreen; if (r) { const p = r.call(camEl); p && p.catch && p.catch(() => { }) } }
+      else if (!on && fsEl()) { const x = document.exitFullscreen || document.webkitExitFullscreen; if (x) { const p = x.call(document); p && p.catch && p.catch(() => { }) } }
+    } catch { }
+  }
+  const fsChange = () => { if (!fsEl() && camEl.classList.contains('full') && camEl.dataset.fs) camFull(false); camEl.dataset.fs = fsEl() ? '1' : '' };
+  document.addEventListener('fullscreenchange', fsChange); document.addEventListener('webkitfullscreenchange', fsChange);
+  addEventListener('keydown', e => { if (e.key === 'Escape' && camEl.classList.contains('full')) camFull(false) });
   function setTab(m) { const c = m === 'cam'; $('#drop').hidden = c; $('#cam').hidden = !c; c ? startCam() : stopCam() }
   function showSrc(m) { show('src'); $('#back').hidden = !S.bmp; setTab(m) }
   async function camFail(why) {
     setTab('file');
     const v = await Popup.open({
-      icon: 'alert', tone: 'err', title: 'เปิดกล้องไม่ได้', body: why,
+      icon: 'alert', tone: 'err', title: 'เปิดกล้องไม่ได้', body: why + (IAB.is ? `<br><small>คุณใช้เบราว์เซอร์ใน ${IAB.name} ซึ่งมักบล็อกกล้อง กด “ใช้แอปกล้องของเครื่อง” เพื่อถ่ายแล้วส่งรูปเข้ามาได้เลย</small>` : ''),
       actions: [{ label: 'ปิด', value: false }, { label: 'ใช้แอปกล้องของเครื่อง', primary: true, value: true }]
     });
     if (v) $('#shot').click();
@@ -472,12 +574,19 @@
   }
   async function startCam() {
     stopCam();
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
-      return camFail('เบราว์เซอร์นี้เปิดกล้องผ่านหน้าเว็บไม่ได้ หรือหน้าเว็บไม่ได้เปิดแบบ HTTPS คุณยังถ่ายด้วยแอปกล้องของเครื่องแล้วนำรูปเข้ามาได้');
+    if (!hasCam())
+      return camFail('เบราว์เซอร์นี้เปิดกล้องผ่านหน้าเว็บไม่ได้ หรือหน้าเว็บไม่ได้เปิดแบบ HTTPS (แอปอย่าง LINE หรือ Facebook มักบล็อกกล้อง ลองเปิดลิงก์ด้วย Chrome/Safari) คุณยังถ่ายด้วยแอปกล้องของเครื่องแล้วนำรูปเข้ามาได้');
     try {
-      const st = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 4096 }, height: { ideal: 2160 } } });
+      const st = await openStream();
       if ($('#cam').hidden) { st.getTracks().forEach(t => t.stop()); return }   // ผู้ใช้สลับแท็บไปแล้วระหว่างรออนุญาต
-      stream = st; vid.srcObject = st; await vid.play().catch(() => { });
+      stream = st; vid.muted = true; vid.setAttribute('playsinline', ''); vid.setAttribute('webkit-playsinline', ''); attach(st);
+      await new Promise(ok => { if (vid.videoWidth) return ok(); const f = () => { vid.removeEventListener('loadedmetadata', f); ok() }; vid.addEventListener('loadedmetadata', f); setTimeout(ok, 4000) });
+      await vid.play().catch(() => { });
+      const trk = st.getVideoTracks()[0];
+      /* ถ้ากล้องยังส่งเฟรมใหญ่เกิน 2048 มาในแอปแชท ให้บีบลงทันที */
+      if (IAB.is && trk && (vid.videoWidth > 2048 || vid.videoHeight > 2048)) {
+        try { await trk.applyConstraints({ width: { max: 2048 }, height: { max: 2048 } }) } catch { }
+      } if (trk) trk.onended = () => { if (stream === st && !$('#cam').hidden) camFail('กล้องหยุดทำงาน (อาจถูกโปรแกรมอื่นใช้หรือถอดออก) ลองเปิดใหม่อีกครั้ง') };
       try { /* ให้กล้องปรับโฟกัส แสง และสีขาวต่อเนื่อง ถ้ากล้องรองรับ */
         const tr = st.getVideoTracks()[0], cap = tr.getCapabilities ? tr.getCapabilities() : {}, adv = {};
         for (const k of ['focusMode', 'exposureMode', 'whiteBalanceMode']) if (cap[k] && cap[k].includes('continuous')) adv[k] = 'continuous';
@@ -486,10 +595,12 @@
       const t = st.getVideoTracks()[0].getSettings();   // เว็บแคมคอมไม่ระบุทิศ ถือเป็นกล้องหน้า
       $('#camnote').textContent = t.width ? `ความละเอียดกล้อง ${t.width}×${t.height} px` : '';
       setFacingUI(t.facingMode);
+      if (IAB.is) $('#camnote').textContent += ' · ถ้าภาพกล้องเพี้ยนหรือเป็นสีเขียว ให้กด “ใช้แอปกล้องของเครื่อง”';
     } catch (e) {
       const m = {
         NotAllowedError: 'ไม่ได้รับอนุญาตให้ใช้กล้อง กดไอคอนข้างช่องที่อยู่เว็บเพื่ออนุญาต แล้วลองใหม่',
-        NotFoundError: 'ไม่พบกล้องในเครื่องนี้', NotReadableError: 'กล้องถูกโปรแกรมอื่นใช้งานอยู่ ปิดโปรแกรมนั้นแล้วลองใหม่'
+        NotFoundError: 'ไม่พบกล้องในเครื่องนี้', DevicesNotFoundError: 'ไม่พบกล้องในเครื่องนี้', PermissionDeniedError: 'ไม่ได้รับอนุญาตให้ใช้กล้อง กดไอคอนข้างช่องที่อยู่เว็บเพื่ออนุญาต แล้วลองใหม่',
+        SecurityError: 'เบราว์เซอร์ไม่อนุญาตให้ใช้กล้องในหน้านี้ ต้องเปิดผ่าน HTTPS และไม่ใช่เบราว์เซอร์ในแอปแชต', NotReadableError: 'กล้องถูกโปรแกรมอื่นใช้งานอยู่ ปิดโปรแกรมนั้นแล้วลองใหม่'
       }[e.name];
       camFail(m || 'เปิดกล้องไม่สำเร็จ (' + esc2(e && e.message || e) + ')');
     }
@@ -507,14 +618,14 @@
     if (!blob) {
       const c = document.createElement('canvas'); c.width = vid.videoWidth; c.height = vid.videoHeight;
       c.getContext('2d').drawImage(vid, 0, 0);
-      blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .95));
+      blob = await toBlobSafe(c, 'image/jpeg', .95);
     }
     if (!blob) return err('ถ่ายรูปไม่สำเร็จ', 'ลองถ่ายใหม่อีกครั้ง');
     if (mir) { /* ให้รูปที่บันทึกตรงกับที่เห็นบนจอ (กลับซ้าย-ขวา) */
       try {
         const bm = await createImageBitmap(blob), fc = document.createElement('canvas'); fc.width = bm.width; fc.height = bm.height;
         const fx = fc.getContext('2d'); fx.translate(bm.width, 0); fx.scale(-1, 1); fx.drawImage(bm, 0, 0); bm.close();
-        blob = await new Promise(r => fc.toBlob(r, 'image/jpeg', .95)) || blob;
+        blob = await toBlobSafe(fc, 'image/jpeg', .95) || blob;
       } catch (e) { console.warn(e) }
     }
     const d = new Date(), p = n => String(n).padStart(2, '0');
@@ -534,6 +645,14 @@
   $('#native').onclick = () => $('#shot').click();
   $('#shot').onchange = e => { load(e.target.files[0]); e.target.value = '' };
   addEventListener('pagehide', stopCam);
+  iabBanner();
+  /* iOS/Android หยุดกล้องเมื่อสลับแอปหรือพับจอ พอกลับมาที่หน้านี้ให้เปิดกล้องต่ออัตโนมัติ */
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || $('#cam').hidden) return;
+    const t = stream && stream.getVideoTracks()[0]; if (!stream || !t || t.readyState !== 'live') startCam();
+  });
+  $('#camfull').onclick = () => camFull(!camEl.classList.contains('full'));
+  vid.ondblclick = () => camFull(!camEl.classList.contains('full'));
   const syncAI = () => { $('#aistr').hidden = document.querySelector('input[name=eng]:checked').value !== 'ai' };
   document.querySelectorAll('input[name=eng]').forEach(r => r.onchange = () => { syncAI(); update() });
   $('#dn').onchange = update; $('#enh').onchange = update; $('#ais').oninput = e => { $('#aisv').textContent = e.target.value + '%'; update() }; syncAI();
