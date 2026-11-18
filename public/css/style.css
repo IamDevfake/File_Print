@@ -780,15 +780,95 @@ video {
   justify-content: center;
   margin-top: 10px
 }
+
 /* ---- กล้องเต็มจอ (ใช้ได้ทั้ง Fullscreen API และโหมดสำรองเต็มหน้าต่าง) ---- */
-html.camlock, html.camlock body { overflow: hidden }
+html.camlock,
+html.camlock body {
+  overflow: hidden
+}
+
 .cam.full {
-  position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 1000;
-  width: 100%; height: 100vh; height: 100dvh; min-height: 0; margin: 0;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1000;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  margin: 0;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-  gap: 8px; border: 0; border-radius: 0; background: #000; color: #fff;
+  gap: 8px;
+  border: 0;
+  border-radius: 0;
+  background: #000;
+  color: #fff;
   justify-content: space-between
 }
-.cam.full #vid { flex: 1 1 auto; min-height: 0; width: 100%; height: 100%; max-width: 100%; max-height: none; object-fit: contain; background: #000 }
-.cam.full .note { color: #ddd; margin: 0; text-align: center }
-.cam.full .row { padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); justify-content: center }
+
+.cam.full #vid {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: none;
+  object-fit: contain;
+  background: #000
+}
+
+.cam.full .note {
+  color: #ddd;
+  margin: 0;
+  text-align: center
+}
+
+.cam.full .row {
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  justify-content: center
+}
+
+@media (pointer: coarse) {}
+
+/* ปิดไฮไลท์เวลาเอานิ้วทัชหรือกดค้าง */
+/* 1. ล้างสไตล์ระบบ (Safari/iOS) */
+button,
+input[type="text"],
+input[type="button"],
+input[type="submit"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* 2. ลบกรอบด้านใน (Firefox) */
+button::-moz-focus-inner,
+input::-moz-focus-inner {
+  border: 0;
+  padding: 0;
+}
+
+/* 3. ปิดแถบไฮไลท์เวลากดทัชสกรีน (Safari Mobile/Chrome Mobile) */
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* 4. ปิด Outline และ Border สีฟ้า ทุกสถานะ (ทุกเบราว์เซอร์) */
+button:focus,
+button:active,
+input:focus,
+input:active {
+  outline: none !important;
+  /* ถ้าคุณมีเงาเดิม ให้ใส่ box-shadow: เงาของคุณ !important; ด้วยครับ */
+}
+
+/* ปิดไฮไลท์การกดสำหรับทุกๆ Element ในเว็บ */
+* {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-touch-callout: none !important;
+  /* ป้องกันเมนูป๊อปอัปเวลากดค้างบน iOS */
+}
